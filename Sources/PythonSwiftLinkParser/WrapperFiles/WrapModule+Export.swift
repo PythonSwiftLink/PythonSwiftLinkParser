@@ -111,7 +111,7 @@ extension WrapModule {
         
     }
     
-    var pyswift_code: String {
+    public var pyswift_code: String {
         
         """
         //

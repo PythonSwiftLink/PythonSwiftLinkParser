@@ -17,7 +17,7 @@ import PyAstParser
 //}
 
 
-class WrapModule: Codable {
+public class WrapModule: Codable {
     
     
     var filename: String
@@ -49,7 +49,7 @@ class WrapModule: Codable {
         case python_classes
         case functions
     }
-    init(fromAst name: String, string: String) async {
+    public init(fromAst name: String, string: String) async {
         filename = name
         let pyString = string.pyPointer
         guard let _parsed: PythonPointerU = Ast.py_cls(method: "parse", args: [pyString]) else { PyErr_Print(); pyString.decref(); return }
@@ -87,7 +87,7 @@ class WrapModule: Codable {
             self.filename = filename
         }
     
-    required init(from decoder: Decoder) throws {
+    required public init(from decoder: Decoder) throws {
         
         let container = try decoder.container(keyedBy: CodingKeys.self)
         filename = try container.decode(String.self, forKey: .filename)
