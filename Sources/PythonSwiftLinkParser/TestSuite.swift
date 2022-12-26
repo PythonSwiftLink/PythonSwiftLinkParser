@@ -62,7 +62,7 @@ func buildTestWrapper() {
         //let wrapper_header = wrapper_headers_path.appendingPathComponent("\(wrap_module.filename).h")
         
         if !file_man.fileExists(atPath: typedefs_dst.path){
-            copyItem(from: wrapper_typedefs.path, to: typedefs_dst.path)
+            //copyItem(from: wrapper_typedefs.path, to: typedefs_dst.path)
         }
 
         //_toolchain(path: cur_dir, command: .clean, args: [py_name, "--add-custom-recipe" ,recipe_dir.path])

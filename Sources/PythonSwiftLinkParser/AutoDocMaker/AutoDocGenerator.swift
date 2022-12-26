@@ -7,9 +7,9 @@ import Foundation
 
 func generateDocs(file: String, path: String) {
     
-    let wrap_py_path = KSLPaths.shared.WRAPPER_SOURCES.appendingPathComponent("\(file).py")
-    let PATH = URL(fileURLWithPath: path)
-    
+//    let wrap_py_path = KSLPaths.shared.WRAPPER_SOURCES.appendingPathComponent("\(file).py")
+//    let PATH = URL(fileURLWithPath: path)
+//    
 //    let py_ast = PythonASTconverter(filename: file)
 //    let wrap_module = py_ast.generateModule(root: wrap_py_path.path, pyi_mode: false)
 //    

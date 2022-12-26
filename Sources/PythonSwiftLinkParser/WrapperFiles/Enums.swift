@@ -77,43 +77,43 @@ enum PythonType: String, CaseIterable,Codable {
     }
 }
 
-enum PythonTypeNew: PyStringEnum, CaseIterable {
-    case int
-    case long
-    case ulong
-    case uint
-    case int32
-    case uint32
-    case int8
-    case char
-    case uint8
-    case uchar
-    case ushort
-    case short
-    case int16
-    case uint16
-    case longlong
-    case ulonglong
-    case float
-    case double
-    case float32
-    case str
-    case bytes
-    case data
-    case json
-    case jsondata
-    case list
-    case sequence
-    case memoryview
-    case tuple
-    case byte_tuple
-    case object
-    case bool
-    case void
-    case None
-    case CythonClass
-    case other
-}
+//enum PythonTypeNew: PyStringEnum, CaseIterable {
+//    case int
+//    case long
+//    case ulong
+//    case uint
+//    case int32
+//    case uint32
+//    case int8
+//    case char
+//    case uint8
+//    case uchar
+//    case ushort
+//    case short
+//    case int16
+//    case uint16
+//    case longlong
+//    case ulonglong
+//    case float
+//    case double
+//    case float32
+//    case str
+//    case bytes
+//    case data
+//    case json
+//    case jsondata
+//    case list
+//    case sequence
+//    case memoryview
+//    case tuple
+//    case byte_tuple
+//    case object
+//    case bool
+//    case void
+//    case None
+//    case CythonClass
+//    case other
+//}
 
 enum pyx_types: String {
     case int32

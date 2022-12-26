@@ -961,7 +961,7 @@ func generateHandlerFuncs(cls: WrapClass, options: [handlerFunctionCodeType]) ->
             case .callback:
                 if cls.swift_object_mode { continue }
                 //let call_args = cls.functions.filter{!$0.has_option(option: .callback) && !$0.has_option(option: .swift_func) && !$0.has_option(option: .dispatch)}.map{"\($0.name): \(cls.title)_\($0.name)"}.joined(separator: ", ")
-                var call_title = cls.title.titleCase()
+                var call_title = cls.title//.titleCase()
                 call_title.removeFirst()
                 output.append("""
                 @_silgen_name(\"set_\(cls.title)_Callback\")

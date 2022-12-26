@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-//import PythonSwiftCore
+import PythonSwiftCore
 
 private let types_array: [Any] = [
     PythonObject.self,
