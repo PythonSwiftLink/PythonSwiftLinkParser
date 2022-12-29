@@ -95,6 +95,10 @@ public class WrapClass: Codable {
     
     var init_function: WrapFunction?
     
+    var ignore_init = false
+    
+    var debug_mode = false
+    
     init(_ name: String) {
         title = name
         functions = []
@@ -106,13 +110,33 @@ public class WrapClass: Codable {
     }
     
     init(fromAst cls: PyAst_Class) {
-        print("\tWrapClass - \(cls.name):")
+        //print("\tWrapClass - \(cls.name):")
         title = cls.name
         functions = []
         decorators = []
         properties = []
         singleton = false
         swift_object_mode = true
+        
+        
+        cls.decorator_list.forEach { deco in
+            switch deco.name {
+            case "wrapper":
+                if let deco = deco as? PyAst_Call {
+                    deco.keywords.forEach { kw in
+                        //print(kw)
+                        switch kw.name {
+                        case "py_init":
+                            ignore_init = !(Bool(kw.value.name) ?? false)
+                        case "debug_mode":
+                            debug_mode = (Bool(kw.value.name) ?? false)
+                        default: break
+                        }
+                    }
+                }
+            default: break
+            }
+        }
         
         for element in cls.body {
             switch element.type {
@@ -129,13 +153,15 @@ public class WrapClass: Codable {
                 }
                 
             case .FunctionDef:
-                
+                let t = PyClassFunctions(rawValue: element.name)
                 switch PyClassFunctions(rawValue: element.name) {
                 case .__call__:
                     pyClassMehthods.append(.__call__)
                 case .__init__:
                     let init_f = WrapFunction(fromAst: element as! PyAst_Function)
                     init_function = init_f
+                case .__buffer__:
+                    pyClassMehthods.append(.__buffer__)
                 default:
                     functions.append(.init(fromAst: element as! PyAst_Function))
                 }
@@ -150,7 +176,7 @@ public class WrapClass: Codable {
                     switch value {
                     case let call as PyAst_Call:
           
-                        if call.name == "Property" {
+                        if ["Property", "property"].contains(call.name) {
                             var setter = true
                             var prop_type: ClassPropertyType = .GetSet
                             
@@ -164,7 +190,7 @@ public class WrapClass: Codable {
                                 .init(name: target.name, property_type: prop_type,
                                     arg_type: .init(
                                         name: target.name,
-                                        type: .init(rawValue: assign.name) ?? .object,
+                                        type: .init(rawValue: call.args.first?.name ?? "object") ?? .object,
                                         other_type: "",
                                         idx: 0,
                                         arg_options: []
@@ -182,7 +208,7 @@ public class WrapClass: Codable {
             }
         
         }
-        
+        callbacks_count = functions.filter({$0.has_option(option: .callback)}).count
     }
     
     required public init(from decoder: Decoder) throws {

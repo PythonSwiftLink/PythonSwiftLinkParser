@@ -20,6 +20,7 @@ enum PyClassFunctions: String, CaseIterable {
     //case __instancecheck__
     case __call__
     case __iter__
+    case __buffer__
     
     var protocol_string: String {
         switch self {
@@ -31,6 +32,8 @@ enum PyClassFunctions: String, CaseIterable {
             return "func __hash__() -> String"
         case .__set_name__:
             return "func __set_name__() -> String"
+        case .__buffer__:
+            return "func __buffer__(s: PyPointer, buffer: UnsafeMutablePointer<Py_buffer>) -> Int32"
         default: return ""
         }
     }
@@ -58,7 +61,7 @@ enum PySequenceFunctions_ {
         switch self {
         case .__len__:
             return "func __len__() -> Int"
-        case .__getitem__(let _, let returns):
+        case .__getitem__(_, let returns):
             return "func __getitem__(idx: Int) -> \(returns.swiftType)"
         case .__setitem__(_, let value):
             return "func __setitem__(idx: Int, newValue: \(value.swiftType)) -> Bool"
@@ -457,7 +460,7 @@ let seq = PySequenceMethodsHandler(methods: .init(
         
         let pymod_addtypes = classes.map { cls -> String in
             "PyModule_AddType(m, \(cls.title)PyType.pytype)"
-        }.joined(separator: ",\n\t\t")
+        }.joined(separator: newLineTabTab)
         
         return """
         \(pyModuleDef)

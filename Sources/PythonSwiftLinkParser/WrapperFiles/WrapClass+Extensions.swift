@@ -11,6 +11,9 @@ import Foundation
 
 public extension WrapClass {
     
+    
+    var getSwiftPointer: String { "(s.getSwiftPointer() as \(title))" }
+    
     var swift_string: String {
         """
         
@@ -36,25 +39,32 @@ public extension WrapClass {
         
         \(PySequenceMethods_Output)
         
+        \(PyBufferProcsHandler_Output)
+        
         \(MainFunctions)
         
         
         let \(title)PyType = SwiftPyType(
             name: "\(title)",
             functions: \(title)_PyFunctions,
-            methods: \(title)_PyMethods,
+            methods: \(if: functions.isEmpty, "nil", "\(title)_PyMethods"),
             getsets: \(if: properties.isEmpty && functions.first(where: {$0.has_option(option: .callback)}) == nil, "nil", "\(title)_PyGetSets"),
             sequence: \(if: pySequenceMethods.isEmpty, "nil" , "\(title)_PySequenceMethods" ),
-            module_target: nil
+            buffer: \(if: pyClassMehthods.contains(.__buffer__), "\(title)_PyBuffer", "nil")
         )
         
         
         
         // Swift Init
-        func create_py\(title)(_ data: \(title)) -> PythonObject {
+        func _create_py\(title)(_ data: \(title)) -> PythonObject {
             let new = PySwiftObject_New(\(title)PyType.pytype)
             setSwiftPointer(new, data)
             return .init(ptr: new, from_getter: true)
+        }
+        func create_py\(title)(_ data: \(title)) -> PyPointer {
+            let new = PySwiftObject_New(\(title)PyType.pytype)
+            setSwiftPointer(new, data)
+            return new
         }
         
         \(pyProtocol)
@@ -62,11 +72,52 @@ public extension WrapClass {
     }
     
     
+    private var PyBufferProcs: String {
+        return """
+        let Whatever_Buffer = PyBufferProcsHandler(
+            getBuffer: { s, buf, flags in
+                if buf == nil {
+                }
+                var pybuf = Py_buffer()
+                let __result__ = \(getSwiftPointer).__buffer__
+                PyBuffer_FillInfo(&pybuf, nil, buffer, size , 0, PyBUF_WRITE)
+            },
+            releaseBuffer: { s, buf in
+            
+            }
+        )
+        """
+    }
     
+    private var PyBufferProcsHandler_Output: String {
+        guard pyClassMehthods.contains(.__buffer__) else { return "" }
+        
+        
+        return """
+        let \(title)_PyBuffer = PyBufferProcsHandler(
+            getBuffer: { s, buf, flags in
+                if let buf = buf {
+                    
+                    let result = \(getSwiftPointer).__buffer__(s: s, buffer: buf)
+                    if result != -1 {
+                        s.incref()
+                    }
+                    return result
+                }
+                PyErr_SetString(PyExc_ValueError, "view in getbuffer is nil")
+                return -1
+                
+            },
+            releaseBuffer: { s, buf in
+            
+            }
+        )
+        """
+    }
     
     private var PyMethodDef_Output: String {
         let funcs = functions.filter { !$0.has_option(option: .callback) }
-        if funcs.isEmpty { return "fileprivate let \(title)_PyMethods = nil"}
+        if funcs.isEmpty { return ""}
         let _funcs = funcs.map { f in
             switch f._args_.count {
             case 0:
@@ -98,21 +149,21 @@ public extension WrapClass {
             case .__len__:
                 length = """
                 length: { s in
-                    return (s.getSwiftPointer() as \(title)).__len__()
+                    return \(getSwiftPointer).__len__()
                 }
                 """.addTabs()
             case .__getitem__(key: _, returns: _):
                 //let _key = key == .object ? "key" : ".init(key)"
                 get_item = """
                 get_item: { s, idx in
-                    return (s.getSwiftPointer() as \(title)).__getitem__(idx: idx )
+                    return \(getSwiftPointer).__getitem__(idx: idx )
                 }
                 """.addTabs()
             case .__setitem__(key: _, value: _):
                 //let _key = key == .object ? "key" : ".init(key)"
                 set_item = """
                 set_item: { s, idx, item in
-                    if (s.getSwiftPointer() as \(title)).__setitem__(idx: idx, newValue: item ) {
+                    if \(getSwiftPointer).__setitem__(idx: idx, newValue: item ) {
                         return 0
                     }
                     return 1
@@ -193,6 +244,10 @@ public extension WrapClass {
         
         let pyseq_functions = pySequenceMethods.map(\.protocol_string).joined(separator: newLineTab)
         
+        let __funcs__ = pyClassMehthods.filter({$0 != .__init__}).map(\.protocol_string).joined(separator: newLineTab)
+        
+        let callbacks = callbacks_count > 0 ? "var py_callback: \(title)PyCallback? { get set }" : ""
+        
         return """
         // Protocol to make target class match the functions in wrapper file
         protocol \(title)_PyProtocol {
@@ -200,7 +255,8 @@ public extension WrapClass {
             \(_init_function)
             \(user_functions)
             \(pyseq_functions)
-        
+            \(__funcs__)
+            \(callbacks)
         }
         """
     }
@@ -215,7 +271,7 @@ public extension WrapClass {
             return ""
         }
         if cls_callbacks {
-            _properties.insert(.init(name: "callback_target", property_type: .GetSet, arg_type: .init(name: "", type: .object, other_type: "", idx: 0, arg_options: [])), at: 0)
+            _properties.insert(.init(name: "py_callback", property_type: .GetSet, arg_type: .init(name: "", type: .object, other_type: "", idx: 0, arg_options: [])), at: 0)
         }
         
         let properties = _properties.map { p -> String in
@@ -242,11 +298,11 @@ public extension WrapClass {
         let arg = prop.arg_type_new
         let is_object = arg.type == .object
         let call = "\(arg.swift_property_getter(arg: "(s.getSwiftPointer() as \(cls_title)).\(prop.name)"))"
-        var setValue = is_object ? ".init(newValue)" : "newValue"
-        var callValue = is_object ? "PyPointer(\(call))" : call
-        if prop.name == "callback_target" {
+        var setValue = is_object ? "v" : "\(arg.type.swiftType)(v)"
+        var callValue = is_object ? "\(call)" : call
+        if prop.name == "py_callback" {
             callValue = "\(call)?.pycall.ptr"
-            setValue = ".init(callback: v)"
+            setValue = "\(title)PyCallback(callback: v)"
         }
         return """
         fileprivate let \(cls_title)_\(prop.name) = PyGetSetDefWrap(
@@ -258,8 +314,8 @@ public extension WrapClass {
                 return .PyNone
             },
             setter: { s,v,clossure in
-                let newValue = \(arg.swift_property_setter(arg: "v"))
-                (s.getSwiftPointer() as \(cls_title)).\(prop.name) = \(setValue)
+                guard let newValue = \(setValue) else { return 1 }
+                (s.getSwiftPointer() as \(cls_title)).\(prop.name) = newValue
                 return 0
                 // return 1 if error
             }
@@ -297,19 +353,19 @@ public extension WrapClass {
             case .__repr__:
                 __repr__ = """
                 { s in
-                    (s.getSwiftPointer() as \(title)).__repr__().withCString(PyUnicode_FromString)
+                    \(getSwiftPointer).__repr__().withCString(PyUnicode_FromString)
                 }
                 """.newLineTabbed
             case .__str__:
                 __str__ = """
                 { s in
-                    (s.getSwiftPointer() as \(title)).__str__().withCString(PyUnicode_FromString)
+                    \(getSwiftPointer).__str__().withCString(PyUnicode_FromString)
                 }
                 """.newLineTabbed
             case .__hash__:
                 __hash__ = """
                 { s in
-                    (s.getSwiftPointer() as \(title)).__hash__()
+                    \(getSwiftPointer).__hash__()
                 }
                 """.newLineTabbed
             case .__set_name__:
@@ -355,11 +411,28 @@ public extension WrapClass {
             }
         }
         
+        let init_call: String
+        
+        if ignore_init {
+            init_call = """
+            PyErr_SetString(PyExc_NotImplementedError,"\(title) can only be inited from swift")
+            return -1
+            """
+        } else {
+            init_call = """
+            setSwiftPointer(
+                s,
+                \(title)(\(init_args.joined(separator: ", ")))
+            )
+            return 0
+            """
+        }
+        
         let __init__ = """
         { s, args, kw -> Int32 in
             
-            print("Py_Init \(title)")
-            \(if: !(init_function?._args_.isEmpty ?? true), """
+            \(if: debug_mode, "print(\"Py_Init \(title)\")")
+            \(if: !(init_function?._args_.isEmpty ?? true) && !ignore_init, """
             
             \(init_vars)
             
@@ -382,24 +455,20 @@ public extension WrapClass {
             }
             
             """.addTabs())
-            setSwiftPointer(
-                s,
-                .init(\(init_args.joined(separator: ", ")))
-            )
-            return 0
+            \(init_call.newLineTabbed)
         }
         """.addTabs()
         
         let __dealloc__ = """
         { s in
-            print("\(title) dealloc", s.printString)
+            \(if: debug_mode, "print(\"\(title) dealloc\", s.printString)")
             s.releaseSwiftPointer(\(title).self)
         }
         """.newLineTabbed
         
         let __new__ = """
         { type, args, kw -> PyPointer in
-            print("\(title) New")
+            \(if: debug_mode, "print(\"\(title) New\")")
             return PySwiftObject_New(type)
         }
         """.newLineTabbed
@@ -421,7 +490,8 @@ public extension WrapClass {
             tp_call: \(title)_Py_Call,
             tp_str: \(__str__),
             tp_repr: \(__repr__)//,
-            //tp_hash: \(__hash__)
+            //tp_hash: \(__hash__),
+            //tp_as_buffer: nil
         )
                 
         """

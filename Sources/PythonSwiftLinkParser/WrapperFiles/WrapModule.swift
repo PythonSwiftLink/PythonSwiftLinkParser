@@ -38,6 +38,7 @@ public class WrapModule: Codable {
     
     var pyi_mode: Bool = false
     
+    var swift_import_list = [String]()
     
     
     
@@ -53,9 +54,13 @@ public class WrapModule: Codable {
         filename = name
         let pyString = string.pyPointer
         guard let _parsed: PythonPointerU = Ast.py_cls(method: "parse", args: [pyString]) else { PyErr_Print(); pyString.decref(); return }
+        #if DEBUG
+        Py_IncRef(_parsed)
+        print(String(Ast.py_cls?.pyObject.dump(node: _parsed, indent: 4 ).pyPointer) ?? "no dump")
+        #endif
         let parsed = PythonObject(ptr: _parsed)
         let ast_module = PyAst_Module(parsed)
-        
+        //print("\(filename).py:")
         //print(ast_module.body)
         
         for element in ast_module.body {
@@ -63,18 +68,44 @@ public class WrapModule: Codable {
             switch element.type {
                 
             case .FunctionDef:
-                print(element)
+                //print(element)
                 functions.append(.init(fromAst: element as! PyAst_Function))
             case .ClassDef:
                 
                 guard let ast_cls = element as? PyAst_Class else { fatalError() }
                 let deco_names = ast_cls.decorator_list.map(\.name)
-                print(deco_names)
-                classes.append(.init(fromAst: ast_cls))
+                //print(deco_names)
+                if let deco = ast_cls.decorator_list.first(where: {$0.name == "wrapper" }) {
+                    //print((deco as! PyAst_Call).keywords.map({($0.name, Bool($0.value.name))}))
+                    
+                    let cls = WrapClass(fromAst: ast_cls)
+//                    if let deco = deco as? PyAst_Call {
+//                        deco.keywords.forEach { kw in
+//                            print(kw)
+//                            switch kw.name {
+//                            case "py_init":
+//                                cls.ignore_init = !(Bool(kw.value.name) ?? false)
+//                            default: break
+//                            }
+//                        }
+//                    }
+                    classes.append(cls)
+                    //fatalError()
+                }
+                //fatalError("Wrapmodule line 73")
+            case .Expr:
+                let expr = (element as! PyAst_Expression)
                 
+                if element.name.contains("import") {
+        
+                    swift_import_list.append(element.name)
+                }
                 
+            case .ImportFrom: continue
                 
             default:
+                print(element)
+                fatalError()
                 continue
             }
         }

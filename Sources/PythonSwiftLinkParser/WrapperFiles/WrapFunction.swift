@@ -66,7 +66,7 @@ public class WrapFunction: Codable {
     
     
     public init(fromAst ast_func: PyAst_Function, callback: Bool = false) {
-        print("\t\tWrapFunction - \(ast_func.name):")
+        //print("\t\tWrapFunction - \(ast_func.name):")
         name = ast_func.name
         args = []
         _args_ = ast_func.args.filter({$0.name != "self"}).enumerated().map(buildWrapArg)

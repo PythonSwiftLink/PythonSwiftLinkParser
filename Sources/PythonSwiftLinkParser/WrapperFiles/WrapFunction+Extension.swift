@@ -21,16 +21,18 @@ public extension WrapFunction {
         if let cls_title = cls_title {
             cls_call = "(s.getSwiftPointer() as \(cls_title))."
         }
+        let rtn_type = _return_.type
+        let use_rtn = !(rtn_type == .void || rtn_type == .None)
+        let result = use_rtn ? "let __result__ = " : ""
+        let rtn = use_rtn ? "__result__.pyPointer" : ".PyNone"
         return """
-        .init(withArgs: "\(name)"){ s, args, nargs in
+        .init(withArgs: "\(name)") { s, args, nargs in
             guard
                 nargs == \(_args_.count),
                 \(arg_extract)
             else { return PyPointer.PyNone! }
-        
-            \(cls_call)\(name)(\(args))
-            
-            return .PyNone
+            \(result)\(cls_call)\(name)(\(args))
+            return \(rtn)
         }
         """
     }
@@ -43,10 +45,14 @@ public extension WrapFunction {
         if let cls_title = cls_title {
             cls_call = "(s.getSwiftPointer() as \(cls_title))."
         }
+        let rtn_type = _return_.type
+        let use_rtn = !(rtn_type == .void || rtn_type == .None)
+        let result = use_rtn ? "let __result__ = " : ""
+        let rtn = use_rtn ? "__result__.pyPointer" : ".PyNone"
         return """
-        .init(oneArg: "\(name)"){ s, \(arg.name) in
-            \(cls_call)\(name)(\(arg.swift_send_call_arg))
-            return .PyNone
+        .init(oneArg: "\(name)") { s, \(arg.name) in
+            \(result)\(cls_call)\(name)(\(arg.swift_send_call_arg))
+            return \(rtn)
         }
         """
     }
@@ -57,10 +63,14 @@ public extension WrapFunction {
         if let cls_title = cls_title {
             cls_call = "(s.getSwiftPointer() as \(cls_title))."
         }
+        let rtn_type = _return_.type
+        let use_rtn = !(rtn_type == .void || rtn_type == .None)
+        let result = use_rtn ? "let __result__ = " : ""
+        let rtn = use_rtn ? "__result__.pyPointer" : ".PyNone"
         return """
-        .init(noArgs: "\(name)"){ s, arg in
-            \(cls_call)\(name)()
-            return .PyNone
+        .init(noArgs: "\(name)") { s, arg in
+            \(result)\(cls_call)\(name)()
+            return \(rtn)
         }
         """
     }

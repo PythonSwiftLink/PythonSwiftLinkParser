@@ -193,7 +193,8 @@ extension WrapModule {
                     return "\(if: f.options.contains(.direct), "", "_")\(f.name) = pycall.\(call_target).\(f.name).ptr"
                 }
                 
-                return "\(if: f.options.contains(.direct), "", "_")\(f.name) = pycall.\(f.name).ptr"
+                //return "\(if: f.options.contains(.direct), "", "_")\(f.name) = pycall.\(f.name).ptr"
+                return "\(if: f.options.contains(.direct), "", "_")\(f.name) = PyObject_GetAttr(callback, \"\(f.name)\")"
                 
             }.joined(separator: newLineTabTab)
             let call_funcs = functions.filter(
@@ -339,7 +340,7 @@ extension WrapModule {
                 public let pycall: PythonObject
                 \(call_pointers)
 
-                init(callback: PythonPointer){
+                init?(callback: PythonPointer){
                     pycall = PythonObject(ptr: callback)
                     \(set_call_pointers)
                 }

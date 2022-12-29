@@ -119,6 +119,7 @@ extension WrapModule {
         //
         
         import Foundation
+        \(swift_import_list.joined(separator: newLine))
         
         \(classes.map(\.swift_string).joined(separator: newLine))
 
