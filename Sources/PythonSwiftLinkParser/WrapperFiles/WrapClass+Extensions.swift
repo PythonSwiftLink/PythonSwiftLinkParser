@@ -20,12 +20,22 @@ public extension WrapClass {
         //
         // \(title)
         //
+        \(if: wrapper_target_type == ._class,
+        """
         
         fileprivate func setSwiftPointer(_ self: PyPointer  ,_ target: \(title)) {
             PySwiftObject_Cast(self).pointee.swift_ptr = Unmanaged.passRetained(target).toOpaque()
         }
-        extension PythonPointer {
         
+        extension PySwiftObjectPointer {
+            fileprivate func getSwiftPointer() -> \(title) {
+                return Unmanaged.fromOpaque(
+                    self!.pointee.swift_ptr
+                ).takeUnretainedValue()
+            }
+        }
+        
+        extension PythonPointer {
             fileprivate func getSwiftPointer() -> \(title) {
                 return Unmanaged.fromOpaque(
                     PySwiftObject_Cast(self).pointee.swift_ptr
@@ -33,6 +43,21 @@ public extension WrapClass {
             }
         }
         
+        """,
+        """
+        fileprivate func setSwiftPointer(_ self: PyPointer  ,_ target: \(title)) {
+            let ptr: UnsafeMutablePointer<\(title)> = .allocate(capacity: 1)
+            ptr.pointee = target
+            PySwiftObject_Cast(self).pointee.swift_ptr = .init(ptr)
+        }
+        extension PythonPointer {
+            fileprivate func getSwiftPointer(_ target: inout \(title))  {
+                let ptr = PySwiftObject_Cast(self).pointee.swift_ptr!
+                target = ptr.assumingMemoryBound(to: \(title).self)
+            }
+        }
+        """
+        )
         \(PyGetSets)
         
         \(PyMethodDef_Output)
@@ -95,12 +120,12 @@ public extension WrapClass {
         
         return """
         let \(title)_PyBuffer = PyBufferProcsHandler(
-            getBuffer: { s, buf, flags in
+            _getBuffer: { s, buf, flags in
                 if let buf = buf {
-                    
-                    let result = \(getSwiftPointer).__buffer__(s: s, buffer: buf)
+                    let _s = unsafeBitCast(s, to: PyPointer.self)
+                    let result = \(getSwiftPointer).__buffer__(s: _s, buffer: buf)
                     if result != -1 {
-                        s.incref()
+                        _s.incref()
                     }
                     return result
                 }
@@ -108,7 +133,7 @@ public extension WrapClass {
                 return -1
                 
             },
-            releaseBuffer: { s, buf in
+            _releaseBuffer: { s, buf in
             
             }
         )
@@ -244,7 +269,9 @@ public extension WrapClass {
         
         let pyseq_functions = pySequenceMethods.map(\.protocol_string).joined(separator: newLineTab)
         
-        let __funcs__ = pyClassMehthods.filter({$0 != .__init__}).map(\.protocol_string).joined(separator: newLineTab)
+        let __funcs__ = pyClassMehthods.filter({$0 != .__init__}).map{ f in
+            wrapper_target_type == ._class ? f.protocol_string : "mutating \(f.protocol_string)"
+        }.joined(separator: newLineTab)
         
         let callbacks = callbacks_count > 0 ? "var py_callback: \(title)PyCallback? { get set }" : ""
         
@@ -306,7 +333,7 @@ public extension WrapClass {
         }
         return """
         fileprivate let \(cls_title)_\(prop.name) = PyGetSetDefWrap(
-            name: "\(prop.name)",
+            pySwift: "\(prop.name)",
             getter: {s,clossure in
                 if let v = \(callValue) {
                     return v
@@ -330,7 +357,7 @@ public extension WrapClass {
         let callValue = is_object ? "PyPointer(\(call))" : call
         return """
         fileprivate let \(cls_title)_\(prop.name) = PyGetSetDefWrap(
-            name: "\(prop.name)",
+            pySwift: "\(prop.name)",
             getter: { s,clossure in
                 if let v = \(callValue) {
                     return v
@@ -462,7 +489,19 @@ public extension WrapClass {
         let __dealloc__ = """
         { s in
             \(if: debug_mode, "print(\"\(title) dealloc\", s.printString)")
-            s.releaseSwiftPointer(\(title).self)
+            //s.releaseSwiftPointer(\(title).self)
+            \(if: wrapper_target_type == ._class,
+            """
+            if let ptr = PySwiftObject_Cast(s).pointee.swift_ptr {
+                    Unmanaged<\(title)>.fromOpaque(ptr).release()
+                }
+            """,
+            """
+            if let ptr = PySwiftObject_Cast(s).pointee.swift_ptr {
+                    ptr.deallocate()
+                }
+            """
+            )
         }
         """.newLineTabbed
         

@@ -71,6 +71,7 @@ public class WrapClass: Codable {
     var properties: [WrapClassProperty]
     let singleton: Bool
     
+    var wrapper_target_type: WrapperTargetType = ._class
     
     
     var callbacks_count = 0
@@ -124,14 +125,18 @@ public class WrapClass: Codable {
             case "wrapper":
                 if let deco = deco as? PyAst_Call {
                     deco.keywords.forEach { kw in
-                        //print(kw)
-                        switch kw.name {
-                        case "py_init":
+                        switch WrapperClassOptions(rawValue: kw.name) {
+                        case .py_init:
                             ignore_init = !(Bool(kw.value.name) ?? false)
-                        case "debug_mode":
+                        case .debug_mode:
                             debug_mode = (Bool(kw.value.name) ?? false)
+                        case .target_type:
+                            wrapper_target_type = .init(rawValue: kw.value.name) ?? ._class
+                        case .service_mode:
+                            break
                         default: break
                         }
+                        
                     }
                 }
             default: break

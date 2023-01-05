@@ -68,45 +68,30 @@ public class WrapModule: Codable {
             switch element.type {
                 
             case .FunctionDef:
-                //print(element)
+                
                 functions.append(.init(fromAst: element as! PyAst_Function))
+                
             case .ClassDef:
                 
                 guard let ast_cls = element as? PyAst_Class else { fatalError() }
-                let deco_names = ast_cls.decorator_list.map(\.name)
-                //print(deco_names)
-                if let deco = ast_cls.decorator_list.first(where: {$0.name == "wrapper" }) {
-                    //print((deco as! PyAst_Call).keywords.map({($0.name, Bool($0.value.name))}))
-                    
-                    let cls = WrapClass(fromAst: ast_cls)
-//                    if let deco = deco as? PyAst_Call {
-//                        deco.keywords.forEach { kw in
-//                            print(kw)
-//                            switch kw.name {
-//                            case "py_init":
-//                                cls.ignore_init = !(Bool(kw.value.name) ?? false)
-//                            default: break
-//                            }
-//                        }
-//                    }
-                    classes.append(cls)
-                    //fatalError()
+                if ast_cls.decorator_list.first(where: {$0.name == "wrapper" }) != nil {
+                    classes.append(.init(fromAst: ast_cls))
                 }
-                //fatalError("Wrapmodule line 73")
-            case .Expr:
-                let expr = (element as! PyAst_Expression)
                 
+            case .Expr:
+
                 if element.name.contains("import") {
-        
                     swift_import_list.append(element.name)
                 }
                 
             case .ImportFrom: continue
                 
             default:
+                
                 print(element)
                 fatalError()
                 continue
+                
             }
         }
         

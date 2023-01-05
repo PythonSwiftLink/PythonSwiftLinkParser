@@ -165,3 +165,15 @@ enum SendFunctionOptions {
     case python
 }
 
+enum WrapperTargetType: String {
+    case _struct = "struct"
+    case _class = "class"
+}
+
+
+enum WrapperClassOptions: String {
+    case py_init
+    case debug_mode
+    case target_type
+    case service_mode
+}
