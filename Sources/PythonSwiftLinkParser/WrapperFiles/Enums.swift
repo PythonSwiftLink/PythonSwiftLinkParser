@@ -174,6 +174,7 @@ enum WrapperTargetType: String {
 enum WrapperClassOptions: String {
     case py_init
     case debug_mode
-    case target_type
+    case type
+    case target
     case service_mode
 }
