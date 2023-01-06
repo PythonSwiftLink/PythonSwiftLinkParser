@@ -55,8 +55,8 @@ public class WrapModule: Codable {
         let pyString = string.pyPointer
         guard let _parsed: PythonPointerU = Ast.py_cls(method: "parse", args: [pyString]) else { PyErr_Print(); pyString.decref(); return }
         #if DEBUG
-        Py_IncRef(_parsed)
-        print(String(Ast.py_cls?.pyObject.dump(node: _parsed, indent: 4 ).pyPointer) ?? "no dump")
+        //Py_IncRef(_parsed)
+        //print(String(Ast.py_cls?.pyObject.dump(node: _parsed, indent: 4 ).pyPointer) ?? "no dump")
         #endif
         let parsed = PythonObject(ptr: _parsed)
         let ast_module = PyAst_Module(parsed)
