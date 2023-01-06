@@ -65,7 +65,7 @@ public class WrapClass: Codable {
         case init_function
     }
     
-    let title: String
+    var title: String
     var functions: [WrapFunction]
     var decorators: [WrapClassDecorator]
     var properties: [WrapClassProperty]
@@ -130,8 +130,10 @@ public class WrapClass: Codable {
                             ignore_init = !(Bool(kw.value.name) ?? false)
                         case .debug_mode:
                             debug_mode = (Bool(kw.value.name) ?? false)
-                        case .target_type:
+                        case .type:
                             wrapper_target_type = .init(rawValue: kw.value.name) ?? ._class
+                        case .target:
+                            title = kw.value.name
                         case .service_mode:
                             break
                         default: break
