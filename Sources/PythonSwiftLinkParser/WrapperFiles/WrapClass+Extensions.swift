@@ -72,7 +72,7 @@ public extension WrapClass {
         let \(title)PyType = SwiftPyType(
             name: "\(title)",
             functions: \(title)_PyFunctions,
-            methods: \(if: functions.isEmpty, "nil", "\(title)_PyMethods"),
+            methods: \(if: functions.filter({!$0.has_option(option: .callback)}).isEmpty, "nil", "\(title)_PyMethods"),
             getsets: \(if: properties.isEmpty && functions.first(where: {$0.has_option(option: .callback)}) == nil, "nil", "\(title)_PyGetSets"),
             sequence: \(if: pySequenceMethods.isEmpty, "nil" , "\(title)_PySequenceMethods" ),
             buffer: \(if: pyClassMehthods.contains(.__buffer__), "\(title)_PyBuffer", "nil")
