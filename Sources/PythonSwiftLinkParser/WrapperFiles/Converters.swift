@@ -45,7 +45,9 @@ let TYPE_SIZES: [String:Int] = [
     "json": MemoryLayout<CChar>.size,
     "bool": MemoryLayout<CBool>.size,
     "str": MemoryLayout<CChar>.size,
-    "void": MemoryLayout<Void>.size
+    "void": MemoryLayout<Void>.size,
+    "callable": MemoryLayout<PythonPointer>.size,
+    "Optional": MemoryLayout<PythonPointer>.size
     
 ]
 
@@ -72,7 +74,7 @@ let PYCALL_TYPES = [
     "float32": "Float",
     //"object": "PythonObject",
     "object": "PyObject*",
-    "data": "PythonData",
+    "data": "Data",
     "bytes": "PythonBytes",
     "jsondata": "PythonJsonData",
     "str": "PythonString"
@@ -101,7 +103,7 @@ let SWIFT_TYPES = [
     "float32": "Float",
     //"object": "PythonObject",
     "object": "PythonPointer",
-    "data": "PythonData",
+    "data": "Data",
     "jsondata": "PythonPointer",
     "json": "PythonPointer",
     "bytes": "PythonPointer",
@@ -236,9 +238,20 @@ func PythonObjectAsSwiftType(arg: WrapArg, option: PythonObjectAsSwiftTypeOption
         T = Void.self
     case .CythonClass:
         T = CythonClass.self
+    case .callable:
+        T = PythonPointer.self
+        otherT = "callable"
+    case .url:
+        T = URL.self
+        otherT = "URL"
+    case .error:
+        T = Error.self
+        otherT = "Error"
+    case .optional: break
     case .other:
         otherT = arg.other_type
     }
+    
     if option == .callback {
         if arg.type == .data { return "inout \(String(describing: T))" }
         if arg.has_option(.memoryview) { return "inout [\(String(describing: T))]" }
@@ -296,15 +309,22 @@ func PurePythonTypeConverter(type: PythonType) -> String{
     
     case .void:
         return "None"
+    case .optional:
+        return "?"
     
     case .byte_tuple:
         return ""
+    case .callable:
+        return "object"
         
     case .CythonClass:
         return type.rawValue
 
     case .bool, .tuple, .list, .None, .other, .sequence, .memoryview:
         return type.rawValue
+    
+    case .url, .error:
+        return "str"
     }
 }
 

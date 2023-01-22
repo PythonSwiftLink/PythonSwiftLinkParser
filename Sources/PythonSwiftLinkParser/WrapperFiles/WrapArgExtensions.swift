@@ -306,6 +306,8 @@ extension WrapArg {
             export = "tuple"
         case .None:
             export = type.rawValue
+        case .optional:
+            export = "?"
         case .CythonClass:
             export = type.rawValue
         case .other:

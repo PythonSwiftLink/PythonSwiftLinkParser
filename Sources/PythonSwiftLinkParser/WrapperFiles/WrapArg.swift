@@ -25,6 +25,8 @@ enum WrapArgOptions: String, CaseIterable, Codable {
     case sequence
     case py_object
     case object_str_enum
+    case callable
+    case optional
 }
 
 private func WrapArgHasOption(arg: WrapArg,option: WrapArgOptions) -> Bool {
@@ -99,7 +101,7 @@ class WrapArg: Codable, Equatable {
             size = TYPE_SIZES[type.rawValue]!
             pyx_type = ""
             objc_type = ""
-            swift_type = SWIFT_TYPES[type.rawValue]!
+            swift_type = SWIFT_TYPES[type.rawValue] ?? ""
             pyx_type = convertPythonType(options: [])
             objc_type = convertPythonType(options: [.objc])
         }

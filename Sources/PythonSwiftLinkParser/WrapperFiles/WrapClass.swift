@@ -111,7 +111,6 @@ public class WrapClass: Codable {
     }
     
     init(fromAst cls: PyAst_Class) {
-        //print("\tWrapClass - \(cls.name):")
         title = cls.name
         functions = []
         decorators = []
@@ -160,8 +159,22 @@ public class WrapClass: Codable {
                 }
                 
             case .FunctionDef:
+                let f = element as! PyAst_Function
+                switch PySequenceFunctions(rawValue: element.name) {
+                case .__getitem__:
+                    let return_type: PythonType =  .init(rawValue: f.returns?.name ?? "" ) ?? .object
+                    pySequenceMethods.append(.__getitem__(key: .int, returns: return_type))
+                    continue
+                case .__setitem__:
+             
+                    let args = f.args.filter({$0.name != "self"})
+                    let value_type: PythonType = .init(rawValue: args.first?.annotation?.name ?? "" ) ?? .object
+                    pySequenceMethods.append(.__setitem__(key: .int, value: value_type ))
+                    continue
+                default: break
+                }
                 let t = PyClassFunctions(rawValue: element.name)
-                switch PyClassFunctions(rawValue: element.name) {
+                switch t {
                 case .__call__:
                     pyClassMehthods.append(.__call__)
                 case .__init__:
@@ -169,6 +182,7 @@ public class WrapClass: Codable {
                     init_function = init_f
                 case .__buffer__:
                     pyClassMehthods.append(.__buffer__)
+                
                 default:
                     functions.append(.init(fromAst: element as! PyAst_Function))
                 }
@@ -193,14 +207,37 @@ public class WrapClass: Codable {
                                 }
                             }
                             prop_type = setter ? .GetSet : .Getter
+                            
+                 
+                            var arg_type: PythonType = .init(rawValue: "") ?? .object
+                            var arg_options = [WrapArgOptions]()
+                            if let first = call.args.first, let t = PythonType(rawValue: first.name) {
+                                
+                                switch t {
+                                case .list:
+                                    if let list = first as? PyAst_Subscript {
+                                        arg_type = .init(rawValue: list.slice.name)!
+                                    }
+                                    arg_options.append(.list)
+                                case .optional:
+                                    if let optional = first as? PyAst_Subscript {
+                                        arg_type = .init(rawValue: optional.slice.name)!
+                                    }
+                                    arg_options.append(.optional)
+                                default: arg_type = t
+                                }
+                                
+                            }
+                            
+                            
                             properties.append(
                                 .init(name: target.name, property_type: prop_type,
                                     arg_type: .init(
                                         name: target.name,
-                                        type: .init(rawValue: call.args.first?.name ?? "object") ?? .object,
+                                        type: arg_type,
                                         other_type: "",
                                         idx: 0,
-                                        arg_options: []
+                                        arg_options: arg_options
                                     )
                                 )
                             )
@@ -211,7 +248,9 @@ public class WrapClass: Codable {
                     }
                 }
         
-            default: fatalError()
+            default:
+                //fatalError()
+                continue
             }
         
         }

@@ -12,6 +12,7 @@ import PyAstParser
 protocol WrapArgProtocol: Decodable {
     
     var name: String { get }
+    var optional_name: String? { get set }
     var type: PythonType { get }
     var other_type: String { get }
     var idx: Int { get }
@@ -47,6 +48,18 @@ protocol WrapArgProtocol: Decodable {
     func swift_property_setter(arg: String) -> String
     
 }
+
+extension WrapArgProtocol {
+    
+    var swiftType: String {
+        if options.contains(.optional) {
+            
+            return "\(type.swiftType)?"
+        }
+        return type.swiftType
+    }
+}
+
 func buildWrapArgReturn(_ v: PyAstObject?) -> WrapArgProtocol {
     var type: PythonType = .None
     var options: [WrapArgOptions] = []
@@ -93,7 +106,14 @@ func wrapArgFromType(name: String, type: PythonType, _other_type: String, idx: I
     case .jsondata:
         return jsonDataArg(_name: name, _type: type, _other_type: "", _idx: idx, _options: options)
     case .bool:
-        return boolArg(_name: name, _type: type, _other_type: "", _idx: idx, _options: options)
+        return boolArg(_name: name, _type: .bool, _other_type: "", _idx: idx, _options: options)
+    case .url, .error:
+        return strArg(_name: name, _type: type, _other_type: "URL_", _idx: idx, _options: options)
+    case .other:
+        return objectArg(_name: name, _type: .other, _other_type: _other_type, _idx: idx, _options: options)
+        //fatalError()
+//    case .callable:
+//        return callableArg(_name: name, _type: type, _other_type: "", _idx: idx, _options: options)
 //    case .other:
 //        guard let mod = wrap_module_shared else { fatalError("WrapModule shared was nil")}
 //        mod.objectEnums(has: arg.other_type) { e in
@@ -117,33 +137,91 @@ func wrapArgFromType(name: String, type: PythonType, _other_type: String, idx: I
     }
 }
 
+func _buildWrapArg(idx: Int, _ v: PyAst_Subscript, name: String) -> WrapArgProtocol {
+    var options: [WrapArgOptions] = []
+    var type: PythonType = .object
+    var other_type = ""
+    if let _type = PythonType(rawValue: v.value.name) {
+        switch _type {
+        case .optional:
+            
+            options.append(.optional)
+            type = .init(rawValue: v.slice.name)!
+            
+        case .tuple:
+            options.append(.tuple)
+        case .list:
+            
+            options.append(.list)
+        case .sequence:
+            options.append(.sequence)
+        case .memoryview:
+            options.append(.memoryview)
+        
+            
+        case .callable:
+            //options.append(.callable)
+            type = .callable
+            switch v.slice.type {
+            case .List:
+                let list = v.slice as! PyAst_List
+                let args = list.elts.enumerated().compactMap(_buildWrapArg)
+                return callableArg(_name: name,  _idx: idx, _options: options, args: args)
+            default:
+                return callableArg(_name: name,  _idx: idx, _options: options, args: [])
+            }
+            
+        default:
+            type = _type
+            other_type = v.value.name
+            fatalError("other: \(v)")
+        }
+    }
+    if let t = PythonType(rawValue: v.slice.name) {
+        if t != .optional {
+            type = t
+        }
+    }
+    return wrapArgFromType(name: name, type: type, _other_type: other_type, idx: idx, options: options)
+}
+
+
+func _buildWrapArg(idx: Int, _ v: PyAst_Arg) -> WrapArgProtocol? {
+    if v.name == "self" { return nil }
+    return buildWrapArg(idx: idx, v)
+}
+
+func _buildWrapArg(idx: Int, _ v: PyAstObject) -> WrapArgProtocol {
+    
+    
+    switch v {
+    case let arg as PyAst_Arg:
+        return buildWrapArg(idx: idx, arg)
+    case let sub as PyAst_Subscript:
+        return _buildWrapArg(idx: idx, sub, name: sub.name)
+    case let n as PyAst_Name:
+        return wrapArgFromType(name: n.name, type: .init(rawValue: v.name) ?? .other, _other_type: v.name, idx: idx, options: [])
+    default:
+        //print(v)
+        fatalError(String(describing: v))
+    }
+}
+
 func buildWrapArg(idx: Int, _ v: PyAst_Arg) -> WrapArgProtocol {
 
     var type: PythonType = .None
     var options: [WrapArgOptions] = []
+    
     if let anno = v.annotation {
         switch anno {
         case let sub as PyAst_Subscript:
-            if let t = PythonType(rawValue: sub.slice.name) {
-                type = t
-                if let _type = PythonType(rawValue: anno.name) {
-                    switch _type {
-                    case .tuple:
-                        options.append(.tuple)
-                    case .list:
-                        options.append(.list)
-                    case .sequence:
-                        options.append(.sequence)
-                    case .memoryview:
-                        options.append(.memoryview)
-                    default:
-                        break
-                    }
-                }
-            }
+            return _buildWrapArg(idx: idx, sub, name: v.name)
+            
         case let _name as PyAst_Name:
             if let _type = PythonType(rawValue: _name.name) {
                 type = _type
+            } else {
+                return wrapArgFromType(name: v.name, type: .other, _other_type: anno.name, idx: idx, options: options)
             }
         default: fatalError()
         }
@@ -154,6 +232,57 @@ func buildWrapArg(idx: Int, _ v: PyAst_Arg) -> WrapArgProtocol {
     //print("\t\t\tbuildWrapArg -> \(v.name): \(type)")
     return wrapArgFromType(name: v.name, type: type, _other_type: "", idx: idx, options: options)
 }
+
+
+func handleWrapArgType(_name: String, _type: PythonType, _other_type: String, _idx: Int, _options: [WrapArgOptions] ) -> WrapArgProtocol {
+  
+        switch _type {
+            
+        case .int, .int32, .int16, .int8, .uint, .uint32, .uint16, .uint8, .long, .ulong, .short, .ushort:
+            return intArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .float, .float32, .double:
+            return floatArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .str:
+            return strArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .data:
+            return dataArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .jsondata:
+            return jsonDataArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .bool:
+            return boolArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+        case .other:
+            guard let mod = wrap_module_shared else { fatalError("WrapModule shared was nil")}
+            if let enumarg =  mod.objectEnums(has: _other_type, out: { e -> WrapArgProtocol in
+                switch e.type {
+                case .str:
+                    return objectStrEnumArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+                case .int:
+                    //out.append(intEnumArg(arg))
+                    return intEnumArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+                case .object:
+                    switch e.subtype {
+                    case .str:
+                        //out.append(objectStrEnumArg(arg))
+                        return objectStrEnumArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+                    default:
+                        return objectArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+                    }
+                }
+                
+            }) {
+                return enumarg
+            }
+            
+        default:
+            fatalError()
+            break
+            //out.append(objectArg(arg))
+        }
+        
+    return objectArg(_name: _name, _type: _type, _other_type: _other_type, _idx: _idx, _options: _options)
+    
+}
+
 
 func handleWrapArgTypes(args: [WrapArg]) -> [WrapArgProtocol]{
     var out = [WrapArgProtocol]()
@@ -175,7 +304,7 @@ func handleWrapArgTypes(args: [WrapArg]) -> [WrapArgProtocol]{
             out.append(boolArg(arg))
         case .other:
             guard let mod = wrap_module_shared else { fatalError("WrapModule shared was nil")}
-            mod.objectEnums(has: arg.other_type) { e in
+            mod.objectEnums(has: arg.other_type) { e  -> Void in
                 switch e.type {
                 case .str:
                     break
@@ -324,6 +453,8 @@ class WrapArgsContainer: Decodable {
 }
 
 class _WrapArg: Decodable {
+
+    
     internal init(_name: String, _type: PythonType, _other_type: String, _idx: Int, _options: [WrapArgOptions]) {
         self._name = _name
         self._type = _type
@@ -350,6 +481,7 @@ class _WrapArg: Decodable {
     
     
     var _name: String
+    var optional_name: String? = nil
     var _type: PythonType
     var _other_type: String
     var _idx: Int
@@ -432,6 +564,7 @@ class _WrapArg: Decodable {
         _list = options.contains(.list)
     }
     
+    
 }
 
 
@@ -470,6 +603,7 @@ extension _WrapArg {
         if _list { return "\(T).pythonList" }
         if self._sequence { return "\(T).array()"}
         if self._type == .bool { return "asPyBool(\(T))"}
+        if self._type == .str { return "\(T).pyPointer"}
         
         return elementConverterPythonType(element: T, T: _type, AsFrom: .AsPythonType)
     }

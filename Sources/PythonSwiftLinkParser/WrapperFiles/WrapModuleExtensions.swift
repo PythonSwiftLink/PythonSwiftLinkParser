@@ -86,7 +86,6 @@ extension WrapModule {
                     
                     let init_args = _init._args_.map({ a in a.swift_protocol_arg }).joined(separator: ", ")
                     init_string = "\t"+"func init(\(init_args))"
-                    print(init_string)
                     
                 } else {
                     init_string = "\t"+"init()"
@@ -371,6 +370,16 @@ extension WrapModule {
                 return
             }
         }
+    }
+    
+    func objectEnums(has t: String, out: @escaping (CustomEnum)->WrapArgProtocol ) -> WrapArgProtocol? {
+        for e in custom_enums {
+            if e.title == t {
+                
+                return out(e)
+            }
+        }
+        return nil
     }
     
     func objectEnums(has t: String) -> CustomEnum? {

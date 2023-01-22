@@ -9,7 +9,6 @@ import Foundation
 
 
 func generateCythonClass(module_name: String, cls: WrapClass, class_vars: String, dispatch_mode: Bool) -> String {
-    print("swift_object_mode",cls.title, cls.swift_object_mode)
     if cls.swift_object_mode {
         return generateSwiftObjectClass(module_name: module_name, cls: cls, class_vars: class_vars, dispatch_mode: dispatch_mode)
     }

@@ -40,6 +40,7 @@ public class WrapModule: Codable {
     
     var swift_import_list = [String]()
     
+    var swiftui_mode: Bool = false
     
     
     private enum CodingKeys: CodingKey {
@@ -50,7 +51,8 @@ public class WrapModule: Codable {
         case python_classes
         case functions
     }
-    public init(fromAst name: String, string: String) async {
+    public init(fromAst name: String, string: String, swiftui: Bool = false) async {
+        swiftui_mode = swiftui
         filename = name
         let pyString = string.pyPointer
         guard let _parsed: PythonPointerU = Ast.py_cls(method: "parse", args: [pyString]) else { PyErr_Print(); pyString.decref(); return }
@@ -60,8 +62,6 @@ public class WrapModule: Codable {
         #endif
         let parsed = PythonObject(ptr: _parsed)
         let ast_module = PyAst_Module(parsed)
-        //print("\(filename).py:")
-        //print(ast_module.body)
         
         for element in ast_module.body {
             
@@ -87,9 +87,7 @@ public class WrapModule: Codable {
             case .ImportFrom: continue
                 
             default:
-                
-                print(element)
-                fatalError()
+      
                 continue
                 
             }

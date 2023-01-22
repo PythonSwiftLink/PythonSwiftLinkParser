@@ -62,11 +62,11 @@ enum PySequenceFunctions_ {
         case .__len__:
             return "func __len__() -> Int"
         case .__getitem__(_, let returns):
-            return "func __getitem__(idx: Int) -> \(returns.swiftType)"
+            return "func __getitem__(idx: Int) throws -> \(returns.swiftType)"
         case .__setitem__(_, let value):
-            return "func __setitem__(idx: Int, newValue: \(value.swiftType)) -> Bool"
+            return "func __setitem__(idx: Int, newValue: \(value.swiftType)) throws"
         case .__delitem__(_):
-            return "func __detitem__(idx: Int) -> Bool"
+            return "func __detitem__(idx: Int) throws"
         case .__missing__:
             return ""
         case .__reversed__:
@@ -375,15 +375,39 @@ extension WrapModule {
                 //let _key = key == .object ? "key" : ".init(key)"
                 get_item = """
                 get_item: { s, idx in
-                    return (s.getSwiftPointer() as \(cls.title)).__getitem__(idx: idx )
-                }
+                    do {
+                        return (s.getSwiftPointer() as \(cls.title)).__getitem__(idx: idx )
+                    }
+                    catch let err as PythonError {
+                        switch err {
+                        case .call: err.triggerError("__getitem__")
+                        default: err.triggerError("note")
+                        }
+                    }
+                    catch let other_error {
+                        other_error.pyExceptionError()
+                        }
+                    }
+                return nil
                 """.addTabs()
             case .__setitem__(key: _, value: _):
                 //let _key = key == .object ? "key" : ".init(key)"
                 set_item = """
                 set_item: { s, idx, item in
-                    if (s.getSwiftPointer() as \(cls.title)).__setitem__(idx: idx, newValue: item ) {
+                    do {
+                        (s.getSwiftPointer() as \(cls.title)).__setitem__(idx: idx, newValue: item )
                         return 0
+                    }
+                
+                    catch let err as PythonError {
+                        switch err {
+                        case .call: err.triggerError("__getitem__")
+                        default: err.triggerError("note")
+                        }
+                    }
+                    catch let other_error {
+                        other_error.pyExceptionError()
+                        }
                     }
                     return 1
                 }

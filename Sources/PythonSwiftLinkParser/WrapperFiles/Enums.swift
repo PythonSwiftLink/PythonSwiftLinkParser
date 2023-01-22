@@ -66,14 +66,27 @@ enum PythonType: String, CaseIterable,Codable {
     case void
     case None
     case CythonClass
+    case callable
     case other
+    case optional = "Optional"
+    case error = "Error"
+    case url = "URL"
     
     var swiftType: String {
         //swiftTypeFromPythonType(T: self) ?? "PyPointer"
-        if self == .object {
+        
+        switch self {
+        case .object:
             return "PyPointer"
+        case .url, .error:
+            return rawValue
+        default:
+            return SWIFT_TYPES[self.rawValue] ?? "PyPointer"
         }
-        return SWIFT_TYPES[self.rawValue] ?? "PyPointer"
+//        if self == .object {
+//            return "PyPointer"
+//        }
+//        return SWIFT_TYPES[self.rawValue] ?? "PyPointer"
     }
 }
 

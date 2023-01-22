@@ -134,7 +134,7 @@ public extension WrapClass {
                 
             },
             _releaseBuffer: { s, buf in
-            
+                
             }
         )
         """
@@ -177,23 +177,51 @@ public extension WrapClass {
                     return \(getSwiftPointer).__len__()
                 }
                 """.addTabs()
-            case .__getitem__(key: _, returns: _):
-                //let _key = key == .object ? "key" : ".init(key)"
+            case .__getitem__(key: _, returns: let rtn):
+                
                 get_item = """
                 get_item: { s, idx in
-                    return \(getSwiftPointer).__getitem__(idx: idx )
+                    do {
+                        return try (s.getSwiftPointer() as \(title)).__getitem__(idx: idx )\(if: rtn != .object, ".pyPointer")
+                    }
+                    catch let err as PythonError {
+                        switch err {
+                        case .call: err.triggerError("__getitem__")
+                        default: err.triggerError("note")
+                        }
+                    }
+                    catch let other_error {
+                        other_error.pyExceptionError()
+                    }
+                    return nil
                 }
                 """.addTabs()
-            case .__setitem__(key: _, value: _):
-                //let _key = key == .object ? "key" : ".init(key)"
+                
+            case .__setitem__(key: _, value: let value):
+  
+                let set_var = value == .object ? "" : "let item = try \(value.swiftType)(object: item)"
+                
                 set_item = """
                 set_item: { s, idx, item in
-                    if \(getSwiftPointer).__setitem__(idx: idx, newValue: item ) {
+                    do {
+                        \(set_var)
+                        try (s.getSwiftPointer() as \(title)).__setitem__(idx: idx, newValue: item )
                         return 0
+                    }
+                
+                    catch let err as PythonError {
+                        switch err {
+                        case .call: err.triggerError("__getitem__")
+                        default: err.triggerError("note")
+                        }
+                    }
+                    catch let other_error {
+                        other_error.pyExceptionError()
                     }
                     return 1
                 }
                 """.addTabs()
+                
             case .__delitem__(key: _):
                 continue
             case .__missing__:
@@ -324,27 +352,31 @@ public extension WrapClass {
     private func generate(GetSet prop: WrapClassProperty, cls_title: String) -> String {
         let arg = prop.arg_type_new
         let is_object = arg.type == .object
-        let call = "\(arg.swift_property_getter(arg: "(s.getSwiftPointer() as \(cls_title)).\(prop.name)"))"
+        let optional = arg.options.contains(.optional)
+        let prop_name = optional ? "\(prop.name)?" : prop.name
+        let target = "(s.getSwiftPointer() as \(cls_title)).\(prop.name)"
+        let call = "\(arg.swift_property_getter(arg: target))"
         var setValue = is_object ? "v" : "\(arg.type.swiftType)(v)"
-        var callValue = is_object ? "\(call)" : call
+        var callValue = target//is_object ? "\(call)" : call
         if prop.name == "py_callback" {
             callValue = "\(call)?.pycall.ptr"
             setValue = "\(title)PyCallback(callback: v)"
         }
+        let getter_extract = optional ? "guard let v = \(target) else { return .PyNone }" : "let v = \(callValue)"
+//        if prop.arg_type_new.type == .str {
+//            callValue = "\(call).pyPointer"
+//        }
         return """
         fileprivate let \(cls_title)_\(prop.name) = PyGetSetDefWrap(
             pySwift: "\(prop.name)",
             getter: {s,clossure in
-                if let v = \(callValue) {
-                    return v
-                }
-                return .PyNone
+                \(getter_extract)
+                return v.pyPointer
             },
             setter: { s,v,clossure in
                 guard let newValue = \(setValue) else { return 1 }
                 (s.getSwiftPointer() as \(cls_title)).\(prop.name) = newValue
                 return 0
-                // return 1 if error
             }
         )
         """.replacingOccurrences(of: newLine, with: newLineTab)
@@ -353,16 +385,18 @@ public extension WrapClass {
     private func generate(Getter prop: WrapClassProperty, cls_title: String) -> String {
         let arg = prop.arg_type_new
         let is_object = arg.type == .object
+        let optional = arg.options.contains(.optional)
+        let target = "(s.getSwiftPointer() as \(cls_title)).\(prop.name)"
         let call = "\(arg.swift_property_getter(arg: "(s.getSwiftPointer() as \(cls_title)).\(prop.name)"))"
-        let callValue = is_object ? "PyPointer(\(call))" : call
+        let callValue = target//is_object ? "PyPointer(\(call))" : call
+        
+        let getter_extract = optional ? "guard let v = \(target) else { return .PyNone }" : "let v = \(callValue)"
         return """
         fileprivate let \(cls_title)_\(prop.name) = PyGetSetDefWrap(
             pySwift: "\(prop.name)",
             getter: { s,clossure in
-                if let v = \(callValue) {
-                    return v
-                }
-                return .PyNone
+                \(getter_extract)
+                return v.pyPointer
             }
         )
         """.replacingOccurrences(of: newLine, with: newLineTab)
@@ -406,21 +440,25 @@ public extension WrapClass {
         if let _init = init_function {
             let args = _init._args_
             init_vars = args.map { a in
-                "var \(a.swift_protocol_arg)\(if: a.type != .object, "?") = nil"
-            }.joined(separator: newLineTabTab)
+                "var \(a.name): \(a.swiftType)"//\(if: a.type != .object, "?") = nil"
+            }.joined(separator: newLineTab)
             
         }
         let init_nargs = init_function?._args_.count ?? 0
         var init_args = [String]()
         var init_lines_kw = [String]()
+        var init_lines_kw_post = [String]()
         var init_lines = [String]()
         
         if let init_func = init_function {
-            init_args = init_func._args_.map {a in "\(a.name): \(a.name)\(if: a.type != .object, "?")"}
+            init_args = init_func._args_.map {a in "\(a.name): \(a.name)"}
             init_lines_kw = init_func._args_.map { a in
                 return """
                 let _\(a.name) = PyDict_GetItem(kw, "\(a.name)")
                 """
+            }
+            init_lines_kw_post = init_func._args_.map { a in
+                "\(a.name) = try .init(object: _\(a.name))"
             }
             init_lines = init_func._args_.map { a in
                 let is_object = a.type == .object
@@ -428,13 +466,13 @@ public extension WrapClass {
                 //                return "let \(a.name): \(a.type.swiftType) = \(is_object ? extract : "init(\(extract)")"
                 return """
                 if nargs > \(a.idx) {
-                    \(a.name) = .init(PyTuple_GetItem(args, 0))
+                    \(a.name) = try \(a.swiftType)(object: PyTuple_GetItem(args, 0))
                 } else {
                     if let _\(a.name) = PyDict_GetItem(kw, "\(a.name)") {
-                        \(a.name) = .init(_\(a.name))
-                    }
+                        \(a.name) = try \(a.swiftType)(object: _\(a.name))
+                    } else { throw PythonError.attribute }
                 }
-                """.newLineTabbed
+                """.newLineTabbed.addTabs()
             }
         }
         
@@ -447,8 +485,7 @@ public extension WrapClass {
             """
         } else {
             init_call = """
-            setSwiftPointer(
-                s,
+            setSwiftPointer(s,
                 \(title)(\(init_args.joined(separator: ", ")))
             )
             return 0
@@ -461,28 +498,35 @@ public extension WrapClass {
             \(if: debug_mode, "print(\"Py_Init \(title)\")")
             \(if: !(init_function?._args_.isEmpty ?? true) && !ignore_init, """
             
-            \(init_vars)
             
-            let nkwargs = (kw == nil) ? 0 : _PyDict_GET_SIZE(kw)
-            if nkwargs >= \(init_nargs) {
-                guard
-                    \(init_lines_kw.joined(separator: ",\n\t\t\t"))
-                else {
-                    PyErr_SetString(PyExc_IndexError, "args missing needed \(init_nargs)")
-                    return -1
+            do {
+                \(init_vars)
+                let nkwargs = (kw == nil) ? 0 : _PyDict_GET_SIZE(kw)
+                if nkwargs >= \(init_nargs) {
+                    guard
+                        \(init_lines_kw.joined(separator: ",\n\t\t"))
+                        
+                    else {
+                        PyErr_SetString(PyExc_IndexError, "args missing needed \(init_nargs)")
+                        return -1
+                    }
+                    \(init_lines_kw_post.joined(separator: newLineTabTab))
+                } else {
+                    let nargs = _PyTuple_GET_SIZE(args)
+                
+                    guard nkwargs + nargs >= \(init_nargs) else {
+                        PyErr_SetString(PyExc_IndexError, "args missing needed \(init_nargs)")
+                        return -1
+                    }
+                    \(init_lines.joined(separator: newLineTabTab))
                 }
-            } else {
-                let nargs = _PyTuple_GET_SIZE(args)
-            
-                guard nkwargs + nargs >= \(init_nargs) else {
-                    PyErr_SetString(PyExc_IndexError, "args missing needed \(init_nargs)")
-                    return -1
-                }
-                \(init_lines.joined(separator: ",\n\t\t"))
+                \(init_call.newLineTabbed.addTabs())
             }
+            catch let err {
             
+            }
             """.addTabs())
-            \(init_call.newLineTabbed)
+            return 1
         }
         """.addTabs()
         

@@ -24,7 +24,10 @@ class intArg: _WrapArg, WrapArgProtocol {
     
     var c_header_arg: String { "PyObject* \(_name)" }
     
-    var swift_protocol_arg: String { "\(_name): \(handleType(T: SWIFT_TYPES[_type.rawValue]!))" }
+    var swift_protocol_arg: String {
+        return "\(_name): \(handleType(T: SWIFT_TYPES[_type.rawValue] ?? "PyPointer"))"
+        
+    }
     
     var swift_send_func_arg: String { "_ \(_name): PythonPointer" }
     

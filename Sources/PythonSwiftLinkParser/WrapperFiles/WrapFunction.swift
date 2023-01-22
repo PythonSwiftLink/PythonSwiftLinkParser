@@ -24,6 +24,8 @@ enum WrapFunctionOption: String, CaseIterable,Codable {
 
 enum WrapFunctionDecoratorType: String, Codable {
     case direct_arg
+    case args_rename
+    case no_labels
 }
 
 class WrapFunctionDecorator: Codable {
@@ -66,11 +68,10 @@ public class WrapFunction: Codable {
     
     
     public init(fromAst ast_func: PyAst_Function, callback: Bool = false) {
-        //print("\t\tWrapFunction - \(ast_func.name):")
         name = ast_func.name
         args = []
-        _args_ = ast_func.args.filter({$0.name != "self"}).enumerated().map(buildWrapArg)
-        
+        _args_ = ast_func.args.filter({$0.name != "self"}).enumerated().map(_buildWrapArg)
+        //_args_ = ast_func.args.enumerated().c
         
         returns = .init(name: "", type: .void, other_type: "", idx: 0, arg_options: [.return_])
         
@@ -84,11 +85,45 @@ public class WrapFunction: Codable {
         call_class = nil
         call_target = nil
         
+        ast_func.decorator_list.forEach { deco in
+            switch WrapFunctionDecoratorType(rawValue: deco.name) {
+                
+            case .args_rename:
+                guard let call = deco as? PyAst_Call else { break }
+                call.keywords.forEach { key in
+                    if let index = _args_.firstIndex(where: { a in a.name == key.name}) {
+                        _args_[index].optional_name = key.value.name
+                        return
+                    }
+                }
+            case .no_labels:
+                if let call = deco as? PyAst_Call {
+
+                    call.keywords.forEach { key in
+                        if let index = _args_.firstIndex(where: { a in a.name == key.name}) {
+                            if let bool = Bool(key.value.name) {
+                                let _arg = _args_[index]
+                                _args_[index].optional_name = bool ? "_ \(_arg.name)" : nil
+                                return
+                            }
+                            
+                            
+                        }
+                    }
+                } else {
+                    for (i, _arg) in _args_.enumerated() {
+                        
+                        _args_[i].optional_name = "_ \(_arg.name)"
+                    }
+                }
+                
+                break
+                
+                //fatalError()
+            default: break
+            }
+        }
         
-        
-//        for arg in ast_func.args {
-//            print(arg.name, arg.annotation?.name ?? "None")
-//        }
     }
     
     init(name: String, args: [WrapArg], rtn: WrapArg!, options: [WrapFunctionOption]) {

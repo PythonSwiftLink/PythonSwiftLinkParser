@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "PythonSwiftLinkParser",
-    platforms: [.macOS(.v11)],
+    platforms: [.macOS(.v11), .iOS(.v13)],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
@@ -15,8 +15,10 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
-        .package(path: "../PyAstParser"),
-        .package(path: "../PythonSwiftCore"),
+        //.package(path: "../PyAstParser"),
+        //.package(path: "../PythonSwiftCore"),
+        .package(url: "https://github.com/PythonSwiftLink/PyAstParser", branch: "main"),
+        .package(url: "https://github.com/PythonSwiftLink/PythonSwiftCore", branch: "testing"),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON", branch: "master"),
     ],
     targets: [

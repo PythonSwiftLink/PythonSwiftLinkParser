@@ -250,7 +250,6 @@ func PythonOperatorHandler(lhs: CPythonTargetTypes, rhs: CPythonTargetTypes, op:
     
     var export: String? = nil
     if lhs == .PythonObject {
-        print("PythonOperatorHandler - lhs: \(lhs.rawValue), rhs: \(rhs.rawValue)")
     }
     
     //handle lhs

@@ -11,7 +11,7 @@ class boolArg: _WrapArg, WrapArgProtocol {
     
     var name: String { _name }
         
-    var type: PythonType { _type }
+    var type: PythonType { .bool }
     
     var other_type: String { _other_type }
     
